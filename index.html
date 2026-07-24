@@ -149,7 +149,8 @@
         }
         .search-result-item:hover { background: var(--azul-light); }
         .search-result-info { display: flex; flex-direction: column; }
-        .search-result-title { font-size: 0.85rem; font-weight: 700; color: var(--carbon); }
+        .search-result-title { font-size: 0.85rem; font-weight: 700; color: var(--carbon); display: flex; align-items: center; gap: 6px; }
+        .search-result-title img { width: 20px; height: 20px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
         .search-result-sub { font-size: 0.72rem; color: var(--gris); }
         .search-result-price { font-size: 0.85rem; font-weight: 800; color: var(--azul); }
 
@@ -266,6 +267,11 @@
         .product-img.verde-bg {
             background: linear-gradient(135deg, var(--verde-light) 0%, #c8edcb 100%);
         }
+        .product-img img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            display: block;
+        }
         .product-badge {
             position: absolute; top: 10px; left: 10px;
             background: var(--azul);
@@ -379,6 +385,12 @@
             background: var(--azul-light);
             display: flex; align-items: center; justify-content: center;
             font-size: 16px; flex-shrink: 0;
+            overflow: hidden;
+        }
+        .cart-item-emoji img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            display: block;
         }
         .cart-item-info { flex: 1; min-width: 0; }
         .cart-item-name {
@@ -511,12 +523,18 @@
 
             <select class="deptos-select" id="depto-select" onchange="filtrarProductos()">
                 <option value="todos">🏠 Todos los Departamentos</option>
+                <option value="analgesicos">💊 Analgésicos</option>
+                <option value="personal">🌿 Cuidado Personal</option>
+                <option value="vitaminas">⚡ Vitaminas</option>
+                <option value="bebe">🍼 Cuidado Bebé</option>
+                <option value="corazon">❤️ Corazón y Circulación</option>
+                <option value="diabeticos">🩺 Diabéticos</option>
             </select>
 
             <div class="sidebar-promo">
                 <div class="promo-icon">🛵</div>
                 <strong>Envío en 30 min</strong>
-                <p>Todos los días, 9 AM – 9 PM</p>
+                <p>Todos los días, 8 AM – 10 PM</p>
             </div>
 
             <div class="sidebar-promo promo-consultorio">
@@ -581,8 +599,12 @@
                     <label class="form-label">¿Con cuánto pagas?</label>
                     <select id="cliente-pago" class="form-select" autocomplete="off" onchange="alCambiarFormaDePago()">
                         <option value="">Selecciona una opción</option>
-                        <option value="Otro monto">Efectivo</option>
-                        <option value="Tarjeta / Transferencia">Tarjeta</option>
+                        <option value="Efectivo Exacto">Efectivo Exacto</option>
+                        <option value="Billete $100" data-monto="100">Billete $100</option>
+                        <option value="Billete $200" data-monto="200">Billete $200</option>
+                        <option value="Billete $500" data-monto="500">Billete $500</option>
+                        <option value="Otro monto">Otro monto (especificar)</option>
+                        <option value="Tarjeta / Transferencia">Tarjeta / Transferencia</option>
                     </select>
 
                     <div id="grupo-otro-monto" style="display:none">
@@ -625,6 +647,17 @@
             const div = document.createElement('div');
             div.textContent = String(texto ?? '');
             return div.innerHTML;
+        }
+
+        // Muestra la imagen real del producto si existe (imagen_url en Supabase).
+        // Si no hay imagen, o si la URL falla al cargar (link roto, 404, etc.),
+        // se regresa automáticamente al emoji como respaldo — nunca se rompe la tarjeta.
+        function iconoProducto(p) {
+            if (p.imagen) {
+                return `<img src="${escaparHTML(p.imagen)}" alt="${escaparHTML(p.nombre)}" loading="lazy"
+                    onerror="this.replaceWith(Object.assign(document.createElement('span'), {textContent: '${escaparHTML(p.emoji)}'}))">`;
+            }
+            return escaparHTML(p.emoji);
         }
 
         // Convierte cualquier valor de precio (número, texto con $, con comas, null, etc.)
@@ -702,6 +735,7 @@
                             depto: p.departamento || '',
                             badge: p.badge || 'Farmacia',
                             emoji: p.emoji || '💊',
+                            imagen: p.imagen_url || null,
                             bgVerde: p.bg_verde || false
                         };
                     });
@@ -739,7 +773,7 @@
             container.innerHTML = lista.map(p => `
                 <div class="product-card">
                     <div class="product-img ${p.bgVerde ? 'verde-bg' : ''}">
-                        ${escaparHTML(p.emoji)}
+                        ${iconoProducto(p)}
                         <span class="product-badge ${p.bgVerde ? 'verde' : ''}">${escaparHTML(p.badge)}</span>
                     </div>
                     <div class="product-body">
@@ -805,7 +839,7 @@
                 dropdownResultados.innerHTML = coincidencias.slice(0, 8).map(p => `
                     <div class="search-result-item" onclick="seleccionarResultado('${p.id}')">
                         <div class="search-result-info">
-                            <span class="search-result-title">${escaparHTML(p.emoji)} ${escaparHTML(p.nombre)}</span>
+                            <span class="search-result-title">${iconoProducto(p)} ${escaparHTML(p.nombre)}</span>
                             <span class="search-result-sub">${escaparHTML(p.sustancia)}</span>
                         </div>
                         <span class="search-result-price">$${p.precio.toFixed(2)}</span>
@@ -1001,7 +1035,7 @@
 
                 cartContent.innerHTML = `<div class="cart-items">` + carrito.map(item => `
                     <div class="cart-item">
-                        <div class="cart-item-emoji">${escaparHTML(item.emoji)}</div>
+                        <div class="cart-item-emoji">${iconoProducto(item)}</div>
                         <div class="cart-item-info">
                             <div class="cart-item-name">${escaparHTML(item.nombre)}</div>
                             <div class="cart-item-sub">x${item.cantidad} - $${(item.precio * item.cantidad).toFixed(2)}</div>
