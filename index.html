@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dunamis Farmacias – Pedidos a Domicilio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Supabase JS Client CDN (Solo lectura de productos) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            /* Paleta extraída del logo Dunamis */
+            --azul:         #1A3FA0;   /* "DUNAMIS" – azul institucional */
+            --azul-mid:     #3AACDE;   /* mortero / detalles cielo */
+            --azul-light:   #E0F4FC;   /* fondos suaves azul */
+            --verde:        #4CB84A;   /* hojas y slogan */
+            --verde-dark:   #2A7A2A;   /* bowl inferior */
+            --verde-light:  #E6F7E6;   /* fondos suaves verde */
+            --gris-marca:   #6B7A8D;   /* "FARMACIAS" en el logo */
+            --carbon:       #1C2340;   /* casi-negro azulado */
+            --gris:         #64748B;
+            --gris-light:   #F1F5F9;
+            --blanco:       #FFFFFF;
+
+            --sombra:       0 4px 24px rgba(26,63,160,0.10);
+            --sombra-hover: 0 12px 40px rgba(26,63,160,0.18);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #F0F6FF;
+            color: var(--carbon);
+            min-height: 100vh;
+        }
+
+        /* ── HEADER ── */
+        header {
+            background: linear-gradient(100deg, var(--azul) 0%, #1e4fcc 100%);
+            position: sticky; top: 0; z-index: 100;
+            box-shadow: 0 2px 20px rgba(26,63,160,0.35);
+        }
+        .header-inner {
+            max-width: 1280px; margin: 0 auto;
+            padding: 0 24px;
+            height: 70px;
+            display: flex; align-items: center; gap: 20px;
+        }
+        .logo-wrap {
+            display: flex; align-items: center; gap: 11px;
+            text-decoration: none; flex-shrink: 0;
+            cursor: pointer;
+        }
+        .logo-img {
+            height: 46px; width: 46px;
+            object-fit: contain;
+            border-radius: 12px;
+            background: white;
+            padding: 4px;
+            box-shadow: 0 2px 10px rgba(58,172,222,0.4);
+        }
+        .logo-fallback {
+            width: 46px; height: 46px;
+            background: var(--azul-mid);
+            border-radius: 12px;
+            align-items: center; justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 2px 10px rgba(58,172,222,0.4);
+            display: none;
+        }
+        .logo-text-wrap { line-height: 1; }
+        .logo-name {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 900; font-size: 1.25rem;
+            color: #fff; letter-spacing: -0.5px;
+        }
+        .logo-name span { color: var(--azul-mid); }
+        .logo-tagline {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.58rem; font-weight: 600;
+            color: var(--verde);
+            letter-spacing: 1.8px;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        /* Buscador con Autocompletado */
+        .search-container {
+            flex: 1;
+            position: relative;
+        }
+        .search-wrap {
+            display: flex;
+            background: rgba(255,255,255,0.12);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.22);
+            transition: background 0.2s;
+        }
+        .search-wrap:focus-within {
+            background: rgba(255,255,255,0.22);
+            border-color: var(--azul-mid);
+        }
+        .search-wrap input {
+            flex: 1; background: transparent; border: none; outline: none;
+            padding: 10px 16px;
+            font-family: 'Inter', sans-serif; font-size: 0.875rem;
+            color: #fff;
+        }
+        .search-wrap input::placeholder { color: rgba(255,255,255,0.5); }
+        .search-wrap button {
+            background: var(--azul-mid);
+            border: none; cursor: pointer;
+            padding: 0 20px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.8rem; font-weight: 800;
+            color: var(--azul);
+            transition: background 0.2s, transform 0.1s;
+        }
+        .search-wrap button:hover { background: #2e9bc8; }
+
+        /* Desplegable de Resultados de Búsqueda */
+        .search-results-dropdown {
+            position: absolute;
+            top: 100%; left: 0; right: 0;
+            margin-top: 6px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+            z-index: 150;
+            display: none;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .search-result-item {
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--gris-light);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .search-result-item:hover { background: var(--azul-light); }
+        .search-result-info { display: flex; flex-direction: column; }
+        .search-result-title { font-size: 0.85rem; font-weight: 700; color: var(--carbon); }
+        .search-result-sub { font-size: 0.72rem; color: var(--gris); }
+        .search-result-price { font-size: 0.85rem; font-weight: 800; color: var(--azul); }
+
+        /* ── LAYOUT ── */
+        .layout {
+            max-width: 1280px; margin: 0 auto;
+            padding: 28px 24px;
+            display: grid;
+            grid-template-columns: 220px 1fr 300px;
+            gap: 24px;
+            align-items: start;
+        }
+
+        /* ── SIDEBAR IZQUIERDO ── */
+        .sidebar-left {
+            background: var(--blanco);
+            border-radius: 18px;
+            padding: 20px;
+            box-shadow: var(--sombra);
+            position: sticky; top: 90px;
+        }
+        .sidebar-title {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.68rem; font-weight: 800;
+            letter-spacing: 2px; text-transform: uppercase;
+            color: var(--gris);
+            margin-bottom: 14px; padding-bottom: 12px;
+            border-bottom: 2px solid var(--gris-light);
+        }
+
+        .deptos-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1.5px solid #E2E8F0;
+            border-radius: 12px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--carbon);
+            background: var(--gris-light);
+            outline: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%231A3FA0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .deptos-select:focus {
+            border-color: var(--azul-mid);
+            background-color: white;
+            box-shadow: 0 0 0 3px rgba(58, 172, 222, 0.2);
+        }
+
+        /* Promociones / Información */
+        .sidebar-promo {
+            margin-top: 14px;
+            background: linear-gradient(135deg, var(--azul) 0%, var(--azul-mid) 100%);
+            border-radius: 14px; padding: 16px;
+            color: white; text-align: center;
+            box-shadow: 0 4px 12px rgba(26,63,160,0.15);
+        }
+
+        .sidebar-promo.promo-consultorio {
+            background: linear-gradient(135deg, var(--verde) 0%, var(--verde-dark) 100%);
+            box-shadow: 0 4px 12px rgba(76,184,74,0.15);
+        }
+
+        .sidebar-promo .promo-icon { font-size: 28px; margin-bottom: 6px; }
+        .sidebar-promo p { font-size: 0.78rem; font-weight: 600; line-height: 1.4; }
+        .sidebar-promo strong {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 1rem; font-weight: 900;
+            display: block; margin-bottom: 4px;
+        }
+
+        /* ── MAIN ── */
+        .main-section { min-width: 0; }
+        .section-header {
+            display: flex; align-items: baseline; gap: 12px; margin-bottom: 20px;
+        }
+        .section-title {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 1.5rem; font-weight: 900;
+            color: var(--carbon); letter-spacing: -0.5px;
+        }
+        .section-count { font-size: 0.8rem; font-weight: 600; color: var(--gris); }
+
+        /* ── PRODUCTO CARD ── */
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 18px;
+        }
+        .product-card {
+            background: var(--blanco);
+            border-radius: 18px; overflow: hidden;
+            box-shadow: var(--sombra);
+            display: flex; flex-direction: column;
+            transition: transform 0.22s cubic-bezier(.22,.68,0,1.2), box-shadow 0.22s;
+            border: 1.5px solid transparent;
+        }
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--sombra-hover);
+            border-color: var(--azul-light);
+        }
+        .product-img {
+            height: 150px;
+            background: linear-gradient(135deg, var(--azul-light) 0%, #cbe8f7 100%);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 52px; position: relative;
+        }
+        .product-img.verde-bg {
+            background: linear-gradient(135deg, var(--verde-light) 0%, #c8edcb 100%);
+        }
+        .product-badge {
+            position: absolute; top: 10px; left: 10px;
+            background: var(--azul);
+            color: white;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.6rem; font-weight: 800;
+            letter-spacing: 0.8px; text-transform: uppercase;
+            padding: 3px 8px; border-radius: 6px;
+        }
+        .product-badge.verde { background: var(--verde); }
+
+        .product-body { padding: 14px; flex: 1; }
+        .product-name {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.95rem; font-weight: 800;
+            color: var(--carbon); margin-bottom: 3px; line-height: 1.2;
+        }
+        .product-sustancia { font-size: 0.75rem; color: var(--gris); font-style: italic; margin-bottom: 2px; }
+        .product-pres { font-size: 0.7rem; color: #94A3B8; }
+
+        .product-footer {
+            padding: 12px 14px;
+            display: flex; align-items: center; justify-content: space-between;
+            border-top: 1.5px dashed #E2E8F0;
+            background: #FAFBFF;
+        }
+        .product-price {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 1.2rem; font-weight: 900; color: var(--azul);
+        }
+        .product-price-label { font-size: 0.65rem; color: var(--gris); font-weight: 500; }
+
+        .btn-agregar {
+            background: var(--azul);
+            color: white; border: none; cursor: pointer;
+            padding: 8px 14px; border-radius: 10px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.8rem; font-weight: 800;
+            transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+            box-shadow: 0 3px 10px rgba(26,63,160,0.25);
+            display: flex; align-items: center; gap: 5px;
+        }
+        .btn-agregar:hover { background: #162e80; box-shadow: 0 6px 18px rgba(26,63,160,0.35); }
+        .btn-agregar:active { transform: scale(0.95); }
+        .btn-agregar.added { background: var(--verde); }
+
+        .no-products {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 40px;
+            background: white;
+            border-radius: 18px;
+            color: var(--gris);
+        }
+
+        /* ── CARRITO ── */
+        .cart-panel {
+            background: var(--blanco);
+            border-radius: 18px;
+            box-shadow: var(--sombra);
+            overflow: hidden;
+            position: sticky; top: 90px;
+        }
+        .cart-header {
+            background: var(--carbon);
+            padding: 16px 20px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .cart-header-icon { font-size: 20px; }
+        .cart-header-title {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.95rem; font-weight: 900;
+            color: white; flex: 1; letter-spacing: -0.3px;
+        }
+        .cart-count-badge {
+            background: var(--azul-mid);
+            color: white;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.7rem; font-weight: 900;
+            width: 22px; height: 22px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .cart-body { padding: 16px 20px; position: relative; }
+        .cart-body::before {
+            content: '';
+            position: absolute; top: 0; left: 12px; right: 12px; height: 4px;
+            background: repeating-linear-gradient(
+                90deg,
+                var(--azul-mid) 0px, var(--azul-mid) 8px,
+                transparent 8px, transparent 14px
+            );
+        }
+
+        .cart-empty { text-align: center; padding: 28px 0; }
+        .cart-empty-icon { font-size: 36px; margin-bottom: 8px; }
+        .cart-empty p { font-size: 0.82rem; color: var(--gris); font-weight: 500; line-height: 1.5; }
+
+        .cart-items { max-height: 220px; overflow-y: auto; }
+        .cart-items::-webkit-scrollbar { width: 4px; }
+        .cart-items::-webkit-scrollbar-track { background: var(--gris-light); border-radius: 4px; }
+        .cart-items::-webkit-scrollbar-thumb { background: var(--azul-mid); border-radius: 4px; }
+
+        .cart-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 0; border-bottom: 1px dashed #E2E8F0;
+        }
+        .cart-item:last-child { border-bottom: none; }
+        .cart-item-emoji {
+            width: 34px; height: 34px; border-radius: 9px;
+            background: var(--azul-light);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; flex-shrink: 0;
+        }
+        .cart-item-info { flex: 1; min-width: 0; }
+        .cart-item-name {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.8rem; font-weight: 700; color: var(--carbon);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .cart-item-sub { font-size: 0.68rem; color: var(--gris); }
+        .btn-remove {
+            background: none; border: none; cursor: pointer;
+            color: #CBD5E1; font-size: 14px;
+            padding: 4px; border-radius: 6px;
+            transition: color 0.15s, background 0.15s;
+        }
+        .btn-remove:hover { color: #EF4444; background: #FEF2F2; }
+
+        .cart-divider { margin: 14px 0 10px; border: none; border-top: 2px dashed #E2E8F0; }
+
+        .cart-total-row {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
+        }
+        .cart-total-label { font-size: 0.82rem; font-weight: 600; color: var(--gris); }
+        .cart-total-value {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 1.5rem; font-weight: 900; color: var(--azul); letter-spacing: -0.5px;
+        }
+
+        /* Formulario de envío */
+        .form-section { margin-top: 14px; }
+        .form-label {
+            display: block; font-size: 0.65rem; font-weight: 700;
+            letter-spacing: 1px; text-transform: uppercase;
+            color: var(--gris); margin-bottom: 4px; margin-top: 10px;
+        }
+        .form-input {
+            width: 100%; padding: 8px 12px;
+            border: 1.5px solid #E2E8F0; border-radius: 10px;
+            font-family: 'Inter', sans-serif; font-size: 0.82rem; color: var(--carbon);
+            background: var(--gris-light); outline: none;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .form-input:focus { border-color: var(--azul-mid); background: white; }
+        .form-input::placeholder { color: #94A3B8; }
+
+        .gps-row { display: flex; gap: 6px; }
+        .gps-row .form-input { flex: 1; }
+        .btn-gps {
+            background: var(--azul-light);
+            color: var(--azul);
+            border: 1.5px solid var(--azul-mid);
+            border-radius: 10px; padding: 0 10px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 0.7rem; font-weight: 800;
+            cursor: pointer; white-space: nowrap; transition: background 0.15s;
+        }
+        .btn-gps:hover { background: #c5e5f5; }
+        .btn-gps.success { background: var(--verde-light); color: var(--verde-dark); border-color: var(--verde); }
+
+        .form-select {
+            width: 100%; padding: 8px 12px;
+            border: 1.5px solid #E2E8F0; border-radius: 10px;
+            font-family: 'Inter', sans-serif; font-size: 0.82rem; color: var(--carbon);
+            background: var(--gris-light); outline: none; appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 12px center; cursor: pointer;
+        }
+        .form-select:focus { border-color: var(--azul-mid); }
+
+        .btn-confirmar {
+            width: 100%; margin-top: 14px; padding: 13px; border: none; border-radius: 12px;
+            font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.9rem; font-weight: 900;
+            cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .btn-confirmar:disabled { background: #E2E8F0; color: #94A3B8; cursor: not-allowed; }
+        .btn-confirmar:not(:disabled) {
+            background: linear-gradient(135deg, var(--azul) 0%, var(--azul-mid) 100%);
+            color: white;
+            box-shadow: 0 6px 20px rgba(26,63,160,0.35);
+        }
+        .btn-confirmar:not(:disabled):hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 28px rgba(26,63,160,0.45);
+        }
+
+        .whatsapp-hint {
+            text-align: center; margin-top: 8px;
+            font-size: 0.68rem; color: #94A3B8; font-weight: 500;
+        }
+
+        @media (max-width: 1024px) {
+            .layout { grid-template-columns: 1fr; }
+            .sidebar-left, .cart-panel { position: static; }
+            .layout { padding: 16px; }
+        }
+        @media (max-width: 640px) {
+            .header-inner { flex-wrap: wrap; height: auto; padding: 12px 16px; gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-inner">
+            <a href="/" class="logo-wrap" title="Recargar página">
+                <img src="logo.jpeg" alt="Dunamis Farmacias" class="logo-img"
+                     onerror="this.style.display='none'; document.querySelector('.logo-fallback').style.display='flex';">
+                <div class="logo-fallback">⚕️</div>
+                <div class="logo-text-wrap">
+                    <div class="logo-name">DUNAMIS <span>FARMACIAS</span></div>
+                    <div class="logo-tagline">Cuidamos tu salud y economía</div>
+                </div>
+            </a>
+
+            <div class="search-container">
+                <div class="search-wrap">
+                    <input type="text" id="buscador" placeholder="Buscar medicamento o sustancia activa…" autocomplete="off">
+                    <button onclick="filtrarProductos()">Buscar</button>
+                </div>
+                <div id="search-results" class="search-results-dropdown"></div>
+            </div>
+        </div>
+    </header>
+
+    <div class="layout">
+
+        <!-- SIDEBAR IZQUIERDO -->
+        <aside class="sidebar-left">
+            <div class="sidebar-title">Departamentos</div>
+
+            <select class="deptos-select" id="depto-select" onchange="filtrarProductos()">
+                <option value="todos">🏠 Todos los Departamentos</option>
+            </select>
+
+            <div class="sidebar-promo">
+                <div class="promo-icon">🛵</div>
+                <strong>Envío en 30 min</strong>
+                <p>Todos los días, 9 AM – 9 PM</p>
+            </div>
+
+            <div class="sidebar-promo promo-consultorio">
+                <div class="promo-icon">🩺</div>
+                <strong>Consultorio Médico</strong>
+                <p>Atención médica general y certificados</p>
+            </div>
+        </aside>
+
+        <!-- MAIN -->
+        <main class="main-section">
+            <div class="section-header">
+                <h2 class="section-title" id="titulo-seccion">Productos Destacados</h2>
+                <span class="section-count" id="contador-productos">Cargando…</span>
+            </div>
+
+            <div class="products-grid" id="contenedor-productos">
+                <!-- Se llena dinámicamente leyendo desde Supabase -->
+            </div>
+        </main>
+
+        <!-- CARRITO -->
+        <aside class="cart-panel">
+            <div class="cart-header">
+                <span class="cart-header-icon">🛒</span>
+                <span class="cart-header-title">Tu Pedido</span>
+                <span class="cart-count-badge" id="cart-badge">0</span>
+            </div>
+
+            <div class="cart-body">
+                <div id="cart-content">
+                    <div class="cart-empty">
+                        <div class="cart-empty-icon">🧺</div>
+                        <p>Tu carrito está vacío.<br>Agrega medicamentos para continuar.</p>
+                    </div>
+                </div>
+
+                <hr class="cart-divider" id="cart-divider" style="display:none">
+
+                <div class="cart-total-row">
+                    <span class="cart-total-label">Total a pagar:</span>
+                    <span class="cart-total-value" id="total-precio">$0.00</span>
+                </div>
+
+                <!-- Formulario -->
+                <form id="formulario-envio" style="display:none" class="form-section" autocomplete="off" onsubmit="return false;">
+                    <label class="form-label">Nombre</label>
+                    <input type="text" id="cliente-nombre" class="form-input" placeholder="Tu nombre completo" autocomplete="off" oninput="validarFormulario()">
+
+                    <label class="form-label">Teléfono</label>
+                    <input type="tel" id="cliente-telefono" class="form-input" placeholder="Número de contacto" autocomplete="off" oninput="validarFormulario()">
+
+                    <label class="form-label">Ubicación GPS</label>
+                    <div class="gps-row">
+                        <input type="text" id="cliente-direccion" class="form-input" placeholder="Presiona 'Ubicarme'" readonly autocomplete="off">
+                        <button type="button" class="btn-gps" id="btn-gps" onclick="obtenerUbicacion()">📍 Ubicarme</button>
+                    </div>
+
+                    <label class="form-label">Referencias</label>
+                    <input type="text" id="cliente-referencias" class="form-input" placeholder="Casa, depto, color de fachada…" autocomplete="off">
+
+                    <label class="form-label">¿Con cuánto pagas?</label>
+                    <select id="cliente-pago" class="form-select" autocomplete="off" onchange="alCambiarFormaDePago()">
+                        <option value="">Selecciona una opción</option>
+                        <option value="Otro monto">Efectivo</option>
+                        <option value="Tarjeta / Transferencia">Tarjeta</option>
+                    </select>
+
+                    <div id="grupo-otro-monto" style="display:none">
+                        <label class="form-label">¿Con cuánto exactamente?</label>
+                        <input type="number" id="cliente-monto-efectivo" class="form-input" placeholder="Ej. 150" min="0" step="1" oninput="validarFormulario()">
+                        <div id="monto-efectivo-msg" style="font-size:0.68rem; margin-top:4px; font-weight:600;"></div>
+                    </div>
+                </form>
+
+                <button class="btn-confirmar" id="btn-confirmar" disabled onclick="enviarWhatsAppDirecto()">
+                    <span>💬</span> Confirmar por WhatsApp
+                </button>
+                <div class="whatsapp-hint" id="whatsapp-hint" style="display:none">
+                    Se abrirá WhatsApp para enviar tu pedido directamente ✓
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        // 1. CONFIGURACIÓN SUPABASE (SOLO PARA LEER PRODUCTOS)
+        // ⚠️ Reemplaza estos dos valores con los de tu proyecto real (Project Settings → API)
+        const SUPABASE_URL = 'https://otlatlizscspbqgofagp.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90bGF0bGl6c2NzcGJxZ29mYWdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2NDkwMzUsImV4cCI6MjEwMDIyNTAzNX0.XTGu_Fck5Vk1opLtdTS599fT5fW6E-NspouSbPyDQk8';
+        const NUMERO_WHATSAPP = '527297314653'; // Tu número de WhatsApp con código de país (Ej: 521...)
+        const CANTIDAD_DESTACADOS = 10; // Cuántos productos al azar se muestran en portada
+
+        // FIX: el CDN de Supabase ya expone una variable global llamada "supabase".
+        // Por eso el cliente se guarda en "supabaseClient" y NO en "supabase",
+        // para no chocar con esa variable global (eso causaba el SyntaxError).
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let productos = [];        // catálogo COMPLETO (para buscar)
+        let carrito = [];
+        let linkGoogleMaps = "";
+
+        // Seguridad: convierte cualquier texto a HTML seguro (evita que datos de la
+        // base de datos con etiquetas <script> o similares se ejecuten en el navegador).
+        function escaparHTML(texto) {
+            const div = document.createElement('div');
+            div.textContent = String(texto ?? '');
+            return div.innerHTML;
+        }
+
+        // Convierte cualquier valor de precio (número, texto con $, con comas, null, etc.)
+        // a un número válido. Si no se puede, regresa 0 en vez de NaN.
+        function parsearPrecio(valor) {
+            if (valor === null || valor === undefined || valor === '') return 0;
+            if (typeof valor === 'number') return isNaN(valor) ? 0 : valor;
+            const limpio = String(valor).replace(/[^0-9.,-]/g, '').replace(',', '.');
+            const num = parseFloat(limpio);
+            return isNaN(num) ? 0 : num;
+        }
+
+        // Fisher-Yates shuffle
+        function mezclar(arr) {
+            const copia = [...arr];
+            for (let i = copia.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [copia[i], copia[j]] = [copia[j], copia[i]];
+            }
+            return copia;
+        }
+
+        // 2. CARGAR PRODUCTOS DESDE SUPABASE (por lotes, para no quedar limitados
+        // por el máximo de filas por consulta ni saturar la conexión con una sola petición enorme)
+        const TAMANO_LOTE = 500; // cuántos productos se piden por cada petición
+
+        async function cargarProductosDesdeSupabase() {
+            try {
+                let data = [];
+                let desde = 0;
+                let siguienteLote = true;
+
+                while (siguienteLote) {
+                    const hasta = desde + TAMANO_LOTE - 1;
+                    const { data: lote, error } = await supabaseClient
+                        .from('productos')
+                        .select('*')
+                        .range(desde, hasta);
+
+                    if (error) throw error;
+
+                    if (lote && lote.length > 0) {
+                        data = data.concat(lote);
+                    }
+
+                    // Si el lote regresó menos productos de los que pedimos,
+                    // ya no hay más productos que traer.
+                    siguienteLote = lote && lote.length === TAMANO_LOTE;
+                    desde += TAMANO_LOTE;
+                }
+
+                if (data && data.length > 0) {
+                    // Diagnóstico: revisamos si el id que viene de Supabase se repite o falta
+                    const idsOriginales = data.map(p => p.id);
+                    const idsUnicos = new Set(idsOriginales.filter(v => v !== null && v !== undefined));
+                    if (idsUnicos.size !== data.length) {
+                        console.warn('⚠️ La columna "id" de tu tabla "productos" en Supabase viene repetida o vacía en algunas filas. Se está generando un id temporal en el navegador para que el carrito y el buscador funcionen bien mientras lo revisas. Primera fila recibida:', data[0]);
+                    }
+
+                    productos = data.map((p, index) => {
+                        const precioNum = parsearPrecio(p.precio);
+                        if (precioNum === 0 && p.precio) {
+                            console.warn('⚠️ No se pudo leer el precio de este producto (revisa la columna "precio" en Supabase):', p);
+                        }
+                        return {
+                            // FIX: usamos la posición (index) como id único del lado del navegador,
+                            // en vez de confiar en p.id, porque puede venir repetido o vacío
+                            // dependiendo de cómo esté configurada la columna en Supabase.
+                            id: String(index),
+                            idOriginalSupabase: p.id, // se guarda solo como referencia/diagnóstico
+                            nombre: p.nombre || 'Producto sin nombre',
+                            sustancia: p.sustancia || '',
+                            pres: p.presentacion || '',
+                            precio: precioNum,
+                            depto: p.departamento || '',
+                            badge: p.badge || 'Farmacia',
+                            emoji: p.emoji || '💊',
+                            bgVerde: p.bg_verde || false
+                        };
+                    });
+                } else {
+                    productos = [];
+                }
+
+                // Al cargar, se muestra solo una muestra aleatoria (portada)
+                mostrarDestacados();
+            } catch (err) {
+                console.error('Error cargando catálogo desde Supabase:', err.message);
+                document.getElementById('contenedor-productos').innerHTML = `
+                    <div class="no-products">❌ Error al cargar los productos. Por favor reintenta.</div>`;
+            }
+        }
+
+        // Muestra una selección aleatoria de productos (vista de portada)
+        function mostrarDestacados() {
+            document.getElementById('titulo-seccion').textContent = 'Productos Destacados';
+            const muestra = mezclar(productos).slice(0, CANTIDAD_DESTACADOS);
+            renderProductos(muestra);
+        }
+
+        // Renderizado de lista de productos
+        function renderProductos(lista) {
+            const container = document.getElementById('contenedor-productos');
+            const count = document.getElementById('contador-productos');
+            count.textContent = `${lista.length} producto${lista.length !== 1 ? 's' : ''}`;
+
+            if (lista.length === 0) {
+                container.innerHTML = `<div class="no-products">🔍 No se encontraron productos disponibles.</div>`;
+                return;
+            }
+
+            container.innerHTML = lista.map(p => `
+                <div class="product-card">
+                    <div class="product-img ${p.bgVerde ? 'verde-bg' : ''}">
+                        ${escaparHTML(p.emoji)}
+                        <span class="product-badge ${p.bgVerde ? 'verde' : ''}">${escaparHTML(p.badge)}</span>
+                    </div>
+                    <div class="product-body">
+                        <div class="product-name">${escaparHTML(p.nombre)}</div>
+                        <div class="product-sustancia">Sustancia: ${escaparHTML(p.sustancia)}</div>
+                        <div class="product-pres">${escaparHTML(p.pres)}</div>
+                    </div>
+                    <div class="product-footer">
+                        <div>
+                            <div class="product-price-label">Precio</div>
+                            <div class="product-price">$${p.precio.toFixed(2)}</div>
+                        </div>
+                        <button class="btn-agregar" onclick="agregarAlCarrito('${p.id}', this)">
+                            <span>+</span> Agregar
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Filtro combinado de búsqueda (siempre sobre el catálogo COMPLETO, no solo los destacados)
+        function filtrarProductos() {
+            const texto = document.getElementById('buscador').value.toLowerCase().trim();
+            const depto = document.getElementById('depto-select').value;
+
+            // Si no hay texto ni filtro de departamento, regresamos a la vista de destacados al azar
+            if (texto === '' && depto === 'todos') {
+                mostrarDestacados();
+                return;
+            }
+
+            const filtrados = productos.filter(p => {
+                const coincideTexto = texto === '' ||
+                    p.nombre.toLowerCase().includes(texto) ||
+                    p.sustancia.toLowerCase().includes(texto);
+                const coincideDepto = (depto === 'todos') || (p.depto === depto);
+                return coincideTexto && coincideDepto;
+            });
+
+            document.getElementById('titulo-seccion').textContent = texto === '' ? 'Productos Destacados' : 'Resultados de búsqueda';
+            renderProductos(filtrados);
+        }
+
+        // Autocompletado del buscador
+        const buscadorInput = document.getElementById('buscador');
+        const dropdownResultados = document.getElementById('search-results');
+
+        buscadorInput.addEventListener('input', function() {
+            const val = this.value.toLowerCase().trim();
+
+            if (val.length === 0) {
+                dropdownResultados.style.display = 'none';
+                mostrarDestacados();
+                return;
+            }
+
+            // FIX: nombre/sustancia null ya no truenan el buscador (se normalizan a '' al cargar)
+            const coincidencias = productos.filter(p =>
+                p.nombre.toLowerCase().includes(val) || p.sustancia.toLowerCase().includes(val)
+            );
+
+            if (coincidencias.length > 0) {
+                dropdownResultados.innerHTML = coincidencias.slice(0, 8).map(p => `
+                    <div class="search-result-item" onclick="seleccionarResultado('${p.id}')">
+                        <div class="search-result-info">
+                            <span class="search-result-title">${escaparHTML(p.emoji)} ${escaparHTML(p.nombre)}</span>
+                            <span class="search-result-sub">${escaparHTML(p.sustancia)}</span>
+                        </div>
+                        <span class="search-result-price">$${p.precio.toFixed(2)}</span>
+                    </div>
+                `).join('');
+                dropdownResultados.style.display = 'block';
+            } else {
+                dropdownResultados.innerHTML = `<div class="search-result-item" style="cursor:default">
+                    <div class="search-result-info"><span class="search-result-sub">Sin coincidencias…</span></div>
+                </div>`;
+                dropdownResultados.style.display = 'block';
+            }
+
+            // También filtramos la cuadrícula principal en vivo
+            filtrarProductos();
+        });
+
+        // Enter dentro del buscador también ejecuta la búsqueda
+        buscadorInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                dropdownResultados.style.display = 'none';
+                filtrarProductos();
+            }
+        });
+
+        // Al seleccionar una sugerencia del dropdown, mostramos SOLO ese producto
+        function seleccionarResultado(id) {
+            const producto = productos.find(p => p.id === id);
+            if (!producto) return;
+            buscadorInput.value = producto.nombre;
+            dropdownResultados.style.display = 'none';
+            document.getElementById('titulo-seccion').textContent = 'Resultados de búsqueda';
+            renderProductos([producto]);
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.search-container')) {
+                dropdownResultados.style.display = 'none';
+            }
+        });
+
+        // Ubicación GPS
+        function obtenerUbicacion() {
+            const btn = document.getElementById('btn-gps');
+            const input = document.getElementById('cliente-direccion');
+            if (!navigator.geolocation) { alert("Tu navegador no soporta geolocalización."); return; }
+            btn.textContent = "⏳ Buscando…"; btn.disabled = true;
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude, lon = pos.coords.longitude;
+                    linkGoogleMaps = `https://maps.google.com/?q=${lat},${lon}`;
+                    input.value = "📍 Ubicación capturada con éxito";
+                    btn.textContent = "✅ Listo"; btn.classList.add('success');
+                    validarFormulario();
+                },
+                (err) => {
+                    btn.textContent = "📍 Ubicarme"; btn.disabled = false;
+                    const msgs = { 1: "Debes dar permisos de ubicación.", 2: "No se pudo determinar tu posición.", 3: "Tiempo de espera agotado." };
+                    alert("❌ " + (msgs[err.code] || "Error desconocido."));
+                }
+            );
+        }
+
+        // LÓGICA DEL CARRITO
+        function agregarAlCarrito(id, btn) {
+            id = String(id); // FIX: aseguramos comparación consistente de tipos
+            const prod = productos.find(p => p.id === id);
+            if (!prod) return;
+
+            const index = carrito.findIndex(item => item.id === id);
+            if (index > -1) {
+                carrito[index].cantidad += 1;
+            } else {
+                carrito.push({ ...prod, cantidad: 1 });
+            }
+
+            if (btn) {
+                const originalText = btn.innerHTML;
+                btn.classList.add('added');
+                btn.innerHTML = '✓ ¡Añadido!';
+                setTimeout(() => {
+                    btn.classList.remove('added');
+                    btn.innerHTML = originalText;
+                }, 1000);
+            }
+
+            actualizarCarrito();
+        }
+
+        function cambiarCantidad(id, cambio) {
+            id = String(id); // FIX: aseguramos comparación consistente de tipos
+            const index = carrito.findIndex(item => item.id === id);
+            if (index > -1) {
+                carrito[index].cantidad += cambio;
+                if (carrito[index].cantidad <= 0) {
+                    carrito.splice(index, 1);
+                }
+            }
+            actualizarCarrito();
+        }
+
+        // Quita un producto del carrito por completo, sin importar la cantidad que tenga
+        function eliminarDelCarrito(id) {
+            id = String(id); // mismo blindaje de tipos que el resto del carrito
+            carrito = carrito.filter(item => item.id !== id);
+            actualizarCarrito();
+        }
+
+        // ── FORMA DE PAGO EN EFECTIVO ──
+        const DENOMINACIONES = [100, 200, 500]; // billetes disponibles en el select
+
+        // Dado el total de la compra, calcula qué billetes tiene sentido ofrecer:
+        // el billete más chico que alcance a cubrir la compra, más uno de "colchón"
+        // arriba de ese. Así, para una compra de $75 se permite $100 y $200,
+        // pero no $500 (evita pedir cambio de un billete exageradamente grande).
+        function billetesPermitidos(total) {
+            const suficientes = DENOMINACIONES.filter(d => d >= total).sort((a, b) => a - b);
+            if (suficientes.length === 0) return []; // ningún billete preestablecido alcanza
+            return suficientes.slice(0, 2); // el mínimo que alcanza + un colchón
+        }
+
+        // Oculta/deshabilita en el <select> los billetes que no tengan sentido para el total actual
+        function actualizarOpcionesPago(total) {
+            const select = document.getElementById('cliente-pago');
+            const permitidos = billetesPermitidos(total);
+
+            let seleccionInvalida = false;
+            Array.from(select.options).forEach(opt => {
+                const monto = opt.dataset.monto ? parseFloat(opt.dataset.monto) : null;
+                if (monto === null) return; // no es una opción de billete (Efectivo Exacto, Otro monto, Tarjeta, etc.)
+
+                const permitido = permitidos.includes(monto);
+                opt.hidden = !permitido;
+                opt.disabled = !permitido;
+
+                if (!permitido && select.value === opt.value) {
+                    seleccionInvalida = true;
+                }
+            });
+
+            // Si la opción seleccionada dejó de tener sentido (p. ej. el carrito bajó de precio), se reinicia
+            if (seleccionInvalida) {
+                select.value = '';
+                alCambiarFormaDePago();
+            }
+        }
+
+        // Se ejecuta cuando el usuario cambia la forma de pago: muestra/oculta el campo de "otro monto"
+        function alCambiarFormaDePago() {
+            const pago = document.getElementById('cliente-pago').value;
+            const grupoOtro = document.getElementById('grupo-otro-monto');
+            const inputOtro = document.getElementById('cliente-monto-efectivo');
+
+            if (pago === 'Otro monto') {
+                grupoOtro.style.display = 'block';
+            } else {
+                grupoOtro.style.display = 'none';
+                inputOtro.value = '';
+                document.getElementById('monto-efectivo-msg').textContent = '';
+            }
+            validarFormulario();
+        }
+
+        function actualizarCarrito() {
+            const countBadge = document.getElementById('cart-badge');
+            const cartContent = document.getElementById('cart-content');
+            const cartDivider = document.getElementById('cart-divider');
+            const totalPrecio = document.getElementById('total-precio');
+            const formEnvio = document.getElementById('formulario-envio');
+            const hint = document.getElementById('whatsapp-hint');
+
+            const totalItems = carrito.reduce((acc, item) => acc + item.cantidad, 0);
+            const totalPagar = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+
+            countBadge.textContent = totalItems;
+            totalPrecio.textContent = `$${totalPagar.toFixed(2)}`;
+            actualizarOpcionesPago(totalPagar);
+
+            if (carrito.length === 0) {
+                cartContent.innerHTML = `
+                    <div class="cart-empty">
+                        <div class="cart-empty-icon">🧺</div>
+                        <p>Tu carrito está vacío.<br>Agrega medicamentos para continuar.</p>
+                    </div>`;
+                cartDivider.style.display = 'none';
+                formEnvio.style.display = 'none';
+                hint.style.display = 'none';
+            } else {
+                cartDivider.style.display = 'block';
+                formEnvio.style.display = 'block';
+                hint.style.display = 'block';
+
+                cartContent.innerHTML = `<div class="cart-items">` + carrito.map(item => `
+                    <div class="cart-item">
+                        <div class="cart-item-emoji">${escaparHTML(item.emoji)}</div>
+                        <div class="cart-item-info">
+                            <div class="cart-item-name">${escaparHTML(item.nombre)}</div>
+                            <div class="cart-item-sub">x${item.cantidad} - $${(item.precio * item.cantidad).toFixed(2)}</div>
+                        </div>
+                        <button class="btn-remove" onclick="cambiarCantidad('${item.id}', 1)">➕</button>
+                        <button class="btn-remove" onclick="eliminarDelCarrito('${item.id}')" title="Quitar producto">✕</button>
+                    </div>
+                `).join('') + `</div>`;
+            }
+
+            validarFormulario();
+        }
+
+        function validarFormulario() {
+            const nombre = document.getElementById('cliente-nombre').value.trim();
+            const telefono = document.getElementById('cliente-telefono').value.trim();
+            const direccion = document.getElementById('cliente-direccion').value.trim();
+            const pago = document.getElementById('cliente-pago').value;
+            const btn = document.getElementById('btn-confirmar');
+            const total = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+
+            let pagoValido = pago !== "";
+
+            if (pago === 'Otro monto') {
+                const montoInput = document.getElementById('cliente-monto-efectivo');
+                const msg = document.getElementById('monto-efectivo-msg');
+                const monto = parseFloat(montoInput.value);
+
+                // Tope razonable: el billete inmediato superior al mínimo que cubre el total.
+                // Si ningún billete preestablecido alcanza, se permite cualquier monto >= total.
+                const permitidos = billetesPermitidos(total);
+                const tope = permitidos.length > 0 ? permitidos[permitidos.length - 1] : null;
+
+                if (isNaN(monto) || monto <= 0) {
+                    pagoValido = false;
+                    msg.textContent = '';
+                } else if (monto < total) {
+                    pagoValido = false;
+                    msg.style.color = '#EF4444';
+                    msg.textContent = `El monto debe ser mayor o igual al total ($${total.toFixed(2)}).`;
+                } else if (tope !== null && monto > tope) {
+                    pagoValido = false;
+                    msg.style.color = '#EF4444';
+                    msg.textContent = `Para esta compra, el monto máximo aceptado es $${tope.toFixed(2)}.`;
+                } else {
+                    msg.style.color = 'var(--verde-dark)';
+                    msg.textContent = `Cambio a preparar: $${(monto - total).toFixed(2)}`;
+                }
+            }
+
+            if (carrito.length > 0 && nombre !== "" && telefono !== "" && direccion !== "" && pagoValido) {
+                btn.disabled = false;
+            } else {
+                btn.disabled = true;
+            }
+        }
+
+        // 3. ENVÍO DIRECTO A WHATSAPP
+        function enviarWhatsAppDirecto() {
+            const nombre = document.getElementById('cliente-nombre').value.trim();
+            const telefono = document.getElementById('cliente-telefono').value.trim();
+            const referencias = document.getElementById('cliente-referencias').value.trim();
+            const pago = document.getElementById('cliente-pago').value;
+            const total = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+
+            let mensaje = `*NUEVO PEDIDO - DUNAMIS FARMACIAS*\n\n`;
+            mensaje += `👤 *Cliente:* ${nombre}\n`;
+            mensaje += `📞 *Teléfono:* ${telefono}\n`;
+            mensaje += `📍 *Ubicación GPS:* ${linkGoogleMaps}\n`;
+            if (referencias) mensaje += `🏠 *Referencias:* ${referencias}\n`;
+
+            if (pago === 'Otro monto') {
+                const monto = parseFloat(document.getElementById('cliente-monto-efectivo').value);
+                mensaje += `💵 *Pago con:* Efectivo, billete de $${monto.toFixed(2)}\n`;
+                mensaje += `🔁 *Cambio a preparar:* $${(monto - total).toFixed(2)}\n\n`;
+            } else {
+                mensaje += `💵 *Pago con:* ${pago}\n\n`;
+            }
+
+            mensaje += `*PRODUCTOS:*\n`;
+            carrito.forEach(i => {
+                mensaje += `• ${i.nombre} (x${i.cantidad}) - $${(i.precio * i.cantidad).toFixed(2)}\n`;
+            });
+
+            mensaje += `\n💰 *TOTAL:* $${total.toFixed(2)}`;
+
+            const url = `https://wa.me/${NUMERO_WHATSAPP}?text=${encodeURIComponent(mensaje)}`;
+            window.open(url, '_blank');
+        }
+
+        // Cargar productos al iniciar la página
+        window.addEventListener('DOMContentLoaded', () => {
+            cargarProductosDesdeSupabase();
+        });
+    </script>
+</body>
+</html>
